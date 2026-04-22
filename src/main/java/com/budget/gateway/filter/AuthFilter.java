@@ -1,5 +1,6 @@
 package com.budget.gateway.filter;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.core.Ordered;
@@ -16,9 +17,12 @@ import java.util.Map;
 public class AuthFilter implements GlobalFilter, Ordered {
 
     private final WebClient webClient;
+    private final String internalToken;
 
-    public AuthFilter(WebClient.Builder webClientBuilder) {
+    public AuthFilter(WebClient.Builder webClientBuilder,
+                      @Value("${app.internal.token}") String internalToken) {
         this.webClient = webClientBuilder.baseUrl("http://localhost:8080").build();
+        this.internalToken = internalToken;
     }
 
     @Override
@@ -44,9 +48,11 @@ public class AuthFilter implements GlobalFilter, Ordered {
                         exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
                         return exchange.getResponse().setComplete();
                     }
-                    // Добавляем заголовок X-User-Id в запрос
+                    // Добавляем заголовки X-User-Id и X-Internal-Token
                     ServerWebExchange mutatedExchange = exchange.mutate()
-                            .request(builder -> builder.header("X-User-Id", userId))
+                            .request(builder -> builder
+                                    .header("X-User-Id", userId)
+                                    .header("X-Internal-Token", internalToken))
                             .build();
                     return chain.filter(mutatedExchange);
                 })

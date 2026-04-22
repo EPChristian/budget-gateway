@@ -19,3 +19,8 @@ logging:
   level:
     org.springframework.cloud.gateway: DEBUG
     org.springframework.security: DEBUG
+
+# Внутренний секретный токен (должен совпадать с токеном в монолите)
+app:
+  internal:
+    token: ${INTERNAL_TOKEN:default-secret-change-in-production}
