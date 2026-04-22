@@ -10,19 +10,19 @@ import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
+import java.util.Map;
+
 @Component
 public class AuthFilter implements GlobalFilter, Ordered {
 
     private final WebClient webClient;
 
     public AuthFilter(WebClient.Builder webClientBuilder) {
-        // Адрес монолита – тот же, куда проксируются запросы
         this.webClient = webClientBuilder.baseUrl("http://localhost:8080").build();
     }
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
-        // Пропускаем запросы не к /api/**
         if (!exchange.getRequest().getURI().getPath().startsWith("/api/")) {
             return chain.filter(exchange);
         }
@@ -33,28 +33,31 @@ public class AuthFilter implements GlobalFilter, Ordered {
             return exchange.getResponse().setComplete();
         }
 
-        // Отправляем запрос на проверку в монолит
         return webClient.post()
                 .uri("/api/auth/verify")
                 .header(HttpHeaders.AUTHORIZATION, authHeader)
                 .retrieve()
-                .toBodilessEntity()
-                .flatMap(response -> {
-                    if (response.getStatusCode().is2xxSuccessful()) {
-                        return chain.filter(exchange);
-                    } else {
+                .bodyToMono(Map.class)
+                .flatMap(body -> {
+                    String userId = (String) body.get("userId");
+                    if (userId == null || userId.isBlank()) {
                         exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
                         return exchange.getResponse().setComplete();
                     }
+                    // Добавляем заголовок X-User-Id в запрос
+                    ServerWebExchange mutatedExchange = exchange.mutate()
+                            .request(builder -> builder.header("X-User-Id", userId))
+                            .build();
+                    return chain.filter(mutatedExchange);
                 })
                 .onErrorResume(e -> {
-                    exchange.getResponse().setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR);
+                    exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
                     return exchange.getResponse().setComplete();
                 });
     }
 
     @Override
     public int getOrder() {
-        return -100; // фильтр выполняется рано
+        return -100;
     }
 }
