@@ -8,6 +8,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
@@ -43,23 +44,45 @@ public class AuthFilter implements GlobalFilter, Ordered {
                 .header(HttpHeaders.AUTHORIZATION, authHeader)
                 .retrieve()
                 .bodyToMono(Map.class)
-                .timeout(Duration.ofSeconds(5))  // таймаут 5 секунд
+                .timeout(Duration.ofSeconds(5))
                 .flatMap(body -> {
-                    String userId = (String) body.get("userId");
-                    if (userId == null || userId.isBlank()) {
+                    // Безопасное извлечение userId
+                    Object userIdObj = body.get("userId");
+                    if (userIdObj == null) {
                         exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
                         return exchange.getResponse().setComplete();
                     }
-                    // Добавляем заголовки X-User-Id и X-Internal-Token
+                    String userId = userIdObj.toString(); // безопасное преобразование
+                    if (userId.isBlank()) {
+                        exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
+                        return exchange.getResponse().setComplete();
+                    }
+
+                    // Удаляем оригинальный Authorization и добавляем свои заголовки
                     ServerWebExchange mutatedExchange = exchange.mutate()
                             .request(builder -> builder
-                                    .header("X-User-Id", userId)
-                                    .header("X-Internal-Token", internalToken))
+                                    .headers(headers -> {
+                                        headers.remove(HttpHeaders.AUTHORIZATION);
+                                        headers.set("X-User-Id", userId);
+                                        headers.set("X-Internal-Token", internalToken);
+                                    }))
                             .build();
                     return chain.filter(mutatedExchange);
                 })
+                .onErrorResume(WebClientResponseException.class, ex -> {
+                    int statusCode = ex.getStatusCode().value();
+                    if (statusCode == HttpStatus.UNAUTHORIZED.value()) {
+                        exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
+                    } else if (statusCode >= 500 && statusCode < 600) {
+                        exchange.getResponse().setStatusCode(HttpStatus.BAD_GATEWAY);
+                    } else {
+                        exchange.getResponse().setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR);
+                    }
+                    return exchange.getResponse().setComplete();
+                })
                 .onErrorResume(e -> {
-                    exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
+                    // Обработка таймаутов и других ошибок соединения
+                    exchange.getResponse().setStatusCode(HttpStatus.GATEWAY_TIMEOUT);
                     return exchange.getResponse().setComplete();
                 });
     }
