@@ -22,8 +22,9 @@ public class AuthFilter implements GlobalFilter, Ordered {
     private final String internalToken;
 
     public AuthFilter(WebClient.Builder webClientBuilder,
+                      @Value("${app.auth-service.url}") String authServiceUrl,
                       @Value("${app.internal.token}") String internalToken) {
-        this.webClient = webClientBuilder.baseUrl("http://localhost:8080").build();
+        this.webClient = webClientBuilder.baseUrl(authServiceUrl).build();
         this.internalToken = internalToken;
     }
 
@@ -46,19 +47,17 @@ public class AuthFilter implements GlobalFilter, Ordered {
                 .bodyToMono(Map.class)
                 .timeout(Duration.ofSeconds(5))
                 .flatMap(body -> {
-                    // Безопасное извлечение userId
                     Object userIdObj = body.get("userId");
                     if (userIdObj == null) {
                         exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
                         return exchange.getResponse().setComplete();
                     }
-                    String userId = userIdObj.toString(); // безопасное преобразование
+                    String userId = userIdObj.toString();
                     if (userId.isBlank()) {
                         exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
                         return exchange.getResponse().setComplete();
                     }
 
-                    // Удаляем оригинальный Authorization и добавляем свои заголовки
                     ServerWebExchange mutatedExchange = exchange.mutate()
                             .request(builder -> builder
                                     .headers(headers -> {
@@ -81,7 +80,6 @@ public class AuthFilter implements GlobalFilter, Ordered {
                     return exchange.getResponse().setComplete();
                 })
                 .onErrorResume(e -> {
-                    // Обработка таймаутов и других ошибок соединения
                     exchange.getResponse().setStatusCode(HttpStatus.GATEWAY_TIMEOUT);
                     return exchange.getResponse().setComplete();
                 });
