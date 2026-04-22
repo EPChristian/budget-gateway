@@ -11,6 +11,7 @@ import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
+import java.time.Duration;
 import java.util.Map;
 
 @Component
@@ -42,6 +43,7 @@ public class AuthFilter implements GlobalFilter, Ordered {
                 .header(HttpHeaders.AUTHORIZATION, authHeader)
                 .retrieve()
                 .bodyToMono(Map.class)
+                .timeout(Duration.ofSeconds(5))  // таймаут 5 секунд
                 .flatMap(body -> {
                     String userId = (String) body.get("userId");
                     if (userId == null || userId.isBlank()) {
