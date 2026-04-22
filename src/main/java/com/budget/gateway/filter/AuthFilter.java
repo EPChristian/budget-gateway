@@ -30,12 +30,16 @@ public class AuthFilter implements GlobalFilter, Ordered {
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
-        if (!exchange.getRequest().getURI().getPath().startsWith("/api/")) {
+        String path = exchange.getRequest().getURI().getPath();
+        // Проверяем, что путь начинается с /api или /api/
+        if (!path.startsWith("/api") || path.equals("/api")) {
+            // Защита от пути "/api" без слеша – пропускаем (но такого маршрута нет)
             return chain.filter(exchange);
         }
 
         String authHeader = exchange.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
-        if (authHeader == null || !authHeader.startsWith("Basic ")) {
+        // case-insensitive проверка на "Basic "
+        if (authHeader == null || !authHeader.regionMatches(true, 0, "Basic ", 0, 6)) {
             exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
             return exchange.getResponse().setComplete();
         }
@@ -47,6 +51,10 @@ public class AuthFilter implements GlobalFilter, Ordered {
                 .bodyToMono(Map.class)
                 .timeout(Duration.ofSeconds(5))
                 .flatMap(body -> {
+                    if (body == null || body.isEmpty()) {
+                        exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
+                        return exchange.getResponse().setComplete();
+                    }
                     Object userIdObj = body.get("userId");
                     if (userIdObj == null) {
                         exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
@@ -58,6 +66,7 @@ public class AuthFilter implements GlobalFilter, Ordered {
                         return exchange.getResponse().setComplete();
                     }
 
+                    // Удаляем Authorization, добавляем свои заголовки
                     ServerWebExchange mutatedExchange = exchange.mutate()
                             .request(builder -> builder
                                     .headers(headers -> {
@@ -80,6 +89,7 @@ public class AuthFilter implements GlobalFilter, Ordered {
                     return exchange.getResponse().setComplete();
                 })
                 .onErrorResume(e -> {
+                    // Для таймаутов и ошибок соединения
                     exchange.getResponse().setStatusCode(HttpStatus.GATEWAY_TIMEOUT);
                     return exchange.getResponse().setComplete();
                 });
