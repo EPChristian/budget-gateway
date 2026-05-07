@@ -7,22 +7,20 @@ spring:
         webflux:
           routes:
             - id: budget-monolith
-              uri: http://localhost:8080   # адрес монолита
+              uri: http://monolith:8080   # имя сервиса в docker-compose
               predicates:
-                - Path=/api/**             # все запросы /api/** перенаправляются в монолит
+                - Path=/api/**
 
 server:
-  port: 8081               # Gateway будет слушать на порту 8081, монолит на 8080
+  port: 8081
 
-# Настройки логирования (полезно для отладки)
 logging:
   level:
     org.springframework.cloud.gateway: DEBUG
     org.springframework.security: DEBUG
 
-# Внутренний секретный токен (должен совпадать с токеном в монолите)
 app:
   auth-service:
-    url: ${AUTH_SERVICE_URL:http://localhost:8080}
+    url: http://monolith:8080
   internal:
     token: ${INTERNAL_TOKEN:default-secret-change-in-production}
