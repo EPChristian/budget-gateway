@@ -6,8 +6,12 @@ spring:
       server:
         webflux:
           routes:
+            - id: static
+              uri: http://monolith:8080
+              predicates:
+                - Path=/**, /index.html, /css/**, /js/**, /favicon.ico
             - id: budget-monolith
-              uri: http://monolith:8080   # имя сервиса в docker-compose
+              uri: http://monolith:8080
               predicates:
                 - Path=/api/**
 
