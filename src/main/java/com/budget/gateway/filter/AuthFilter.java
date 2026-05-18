@@ -37,6 +37,17 @@ public class AuthFilter implements GlobalFilter, Ordered {
             return chain.filter(exchange);
         }
 
+        // Публичные эндпоинты: пропускаем без Basic Auth,
+        // но добавляем X-Internal-Token для подтверждения, что запрос прошел через шлюз
+        if (path.equals("/api/users") || path.equals("/api/auth/verify")) {
+            ServerWebExchange mutatedExchange = exchange.mutate()
+                    .request(builder -> builder.headers(headers -> {
+                        headers.set("X-Internal-Token", internalToken);
+                    }))
+                    .build();
+            return chain.filter(mutatedExchange);
+        }
+
         String authHeader = exchange.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
         // case-insensitive проверка на "Basic "
         if (authHeader == null || !authHeader.regionMatches(true, 0, "Basic ", 0, 6)) {
