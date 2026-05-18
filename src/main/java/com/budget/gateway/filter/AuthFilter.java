@@ -39,8 +39,8 @@ public class AuthFilter implements GlobalFilter, Ordered {
             return chain.filter(exchange);
         }
 
-        // Пропускаем БЕЗ Basic Auth ТОЛЬКО метод POST для регистрации
-        if ("/api/users".equals(path) && "POST".equalsIgnoreCase(method)) {
+        // Разрешаем регистрацию (только POST) и вход/верификацию
+        if (("/api/users".equals(path) && "POST".equalsIgnoreCase(method)) || "/api/auth/verify".equals(path)) {
             ServerWebExchange mutatedExchange = exchange.mutate()
                     .request(builder -> builder.headers(headers -> {
                         headers.set("X-Internal-Token", internalToken);
