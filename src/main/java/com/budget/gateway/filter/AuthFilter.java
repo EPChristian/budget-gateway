@@ -31,10 +31,22 @@ public class AuthFilter implements GlobalFilter, Ordered {
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
         String path = exchange.getRequest().getURI().getPath();
+        String method = exchange.getRequest().getMethod().name(); // Получаем метод (POST, GET и т.д.)
+
         // Проверяем, что путь начинается с /api или /api/
         if (!path.startsWith("/api") || path.equals("/api")) {
             // Защита от пути "/api" без слеша – пропускаем (но такого маршрута нет)
             return chain.filter(exchange);
+        }
+
+        // Разрешаем регистрацию (только POST) и вход/верификацию
+        if (("/api/users".equals(path) && "POST".equalsIgnoreCase(method)) || "/api/auth/verify".equals(path)) {
+            ServerWebExchange mutatedExchange = exchange.mutate()
+                    .request(builder -> builder.headers(headers -> {
+                        headers.set("X-Internal-Token", internalToken);
+                    }))
+                    .build();
+            return chain.filter(mutatedExchange);
         }
 
         String authHeader = exchange.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
