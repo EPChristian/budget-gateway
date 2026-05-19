@@ -35,7 +35,6 @@ public class AuthFilter implements GlobalFilter, Ordered {
 
         // Проверяем, что путь начинается с /api или /api/
         if (!path.startsWith("/api") || path.equals("/api")) {
-            // Защита от пути "/api" без слеша – пропускаем (но такого маршрута нет)
             return chain.filter(exchange);
         }
 
