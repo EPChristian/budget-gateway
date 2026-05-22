@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+    <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
+
+    <springProperty scope="context" name="appName" source="spring.application.name"/>
+
+    <!-- Аппендер для отправки логов в Logstash по TCP с защитой от сбоев -->
+    <appender name="LOGSTASH" class="net.logstash.logback.appender.LogstashTcpSocketAppender">
+        <destination>logstash:5044</destination>
+
+        <!-- 1. Политика переподключения: при потере связи пытаться подключиться каждые 10 секунд -->
+        <reconnectionDelay>10 seconds</reconnectionDelay>
+
+        <!-- 2. Таймаут на установку соединения: 5 секунд, чтобы не вешать приложение -->
+        <connectionTimeout>5 seconds</connectionTimeout>
+
+        <!-- 3. Буферизация в памяти: если Logstash временно недоступен, логи не теряются сразу -->
+        <queueSize>10240</queueSize>
+
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <customFields>{"app_name":"${appName}"}</customFields>
+        </encoder>
+    </appender>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="LOGSTASH"/>
+    </root>
+</configuration>
